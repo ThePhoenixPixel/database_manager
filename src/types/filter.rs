@@ -92,9 +92,13 @@ impl QueryFilters {
         }
     }
 
-    pub fn add_filter(mut self, filter: Filter) -> Self {
+    pub fn add(mut self, filter: Filter) -> QueryFilters {
         self.filters.push(filter);
         self
+    }
+    
+    pub fn add_filter(&mut self, filter: Filter) {
+        self.filters.push(filter);
     }
 
     pub fn order_by(mut self, column: impl Into<String>, direction: OrderDirection) -> Self {

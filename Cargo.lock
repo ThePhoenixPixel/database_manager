@@ -186,9 +186,19 @@ version = "0.1.0"
 dependencies = [
  "address",
  "async-trait",
+ "database_manager_derive",
  "serde",
  "sqlx",
  "tokio",
+]
+
+[[package]]
+name = "database_manager_derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

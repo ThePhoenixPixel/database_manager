@@ -4,7 +4,7 @@ use sqlx::{Column};
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions, SqliteRow};
 use sqlx::{Row as SqlxRow};
 
-use crate::manager::DatabaseManager;
+use crate::controller::DatabaseController;
 use crate::drivers::sqlite::sqlite_config::DBSqliteConfig;
 use crate::types::{
     TableSchema,
@@ -162,7 +162,7 @@ impl SqliteManager {
 }
 
 #[async_trait]
-impl DatabaseManager for SqliteManager {
+impl DatabaseController for SqliteManager {
     async fn connect(&mut self) -> DbResult<()> {
         let connection_string = format!("sqlite://{}", self.config.path());
 

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 pub use crate::types::value::Value;
+pub use crate::types::db_types::*;
 pub use crate::types::column::Column;
 pub use crate::types::column::ColumnType;
 pub use crate::types::filter::Filter;
@@ -22,6 +23,7 @@ mod filter;
 mod index;
 mod foreign_key;
 mod alter_table;
+mod db_types;
 
 
 pub type Row = HashMap<String, Value>;

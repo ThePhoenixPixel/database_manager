@@ -38,8 +38,8 @@ async fn main() -> DbResult<()> {
     // Config erstellen
     let config = DatabaseConfig::Sqlite(DBSqliteConfig::new("test.db"));
 
-    // Database-Instance erstellen
-    let mut db = Database::new(config)?;
+    // DatabaseManager-Instance erstellen
+    let mut db = DatabaseManager::new(config)?;
 
     // Verbinden
     db.connect().await?;
@@ -102,7 +102,7 @@ async fn main() -> DbResult<()> {
         )
     );
 
-    let mut db = Database::new(config)?;
+    let mut db = DatabaseManager::new(config)?;
     db.connect().await?;
 
     // ... rest wie SQLite

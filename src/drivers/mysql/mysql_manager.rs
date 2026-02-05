@@ -5,7 +5,7 @@ use sqlx::mysql::{MySqlPool, MySqlPoolOptions, MySqlRow};
 use sqlx::{Row as SqlxRow};
 
 use crate::drivers::mysql::mysql_config::DBMysqlConfig;
-use crate::manager::DatabaseManager;
+use crate::controller::DatabaseController;
 use crate::types::{Column as DbColumn, ColumnType, DbError, DbResult, Row, Value, TableSchema, QueryFilters, FilterOperator, OrderDirection, ForeignKeyAction, IndexType};
 
 pub struct MysqlManager {
@@ -149,7 +149,7 @@ impl MysqlManager {
 }
 
 #[async_trait]
-impl DatabaseManager for MysqlManager {
+impl DatabaseController for MysqlManager {
     async fn connect(&mut self) -> DbResult<()> {
         let connection_string = self.config.get_connection_string();
 

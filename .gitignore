@@ -3,5 +3,5 @@
 /examples/mysql_example.rs
 /examples/sqlite_example.rs
 
-identifier.db
+test.db
 

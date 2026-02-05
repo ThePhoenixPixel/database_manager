@@ -12,12 +12,18 @@ serde = { version = "1.0.228", features = ["derive"] }
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "tls-native-tls"], optional = true }
 tokio = { version = "1.49.0", features = ["rt", "rt-multi-thread", "macros"] }
 
+# Derive macro (optional)
+database_manager_derive = { path = "./database_manager_derive", optional = true }
+
 [dev-dependencies]
 tokio = { version = "1.43", features = ["full"] }
 
 [features]
 default = ["serde"]
 serde = ["address/serde"]
+
+# Derive macro feature
+derive = ["database_manager_derive"]
 
 # Database driver features
 sqlite = ["sqlx", "sqlx/sqlite"]
@@ -31,3 +37,7 @@ required-features = ["sqlite"]
 [[example]]
 name = "mysql_example"
 required-features = ["mysql"]
+
+[[example]]
+name = "derive_example"
+required-features = ["sqlite", "derive"]

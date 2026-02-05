@@ -223,7 +223,10 @@ impl DatabaseManager for MysqlManager {
         sqlx::query(&sql)
             .execute(pool)
             .await
-            .map_err(|e| DbError::SchemaError(e.to_string()))?;
+            .map_err(|e| DbError::CreateTableError {
+                table: schema.name.clone(),
+                message: e.to_string()
+            })?;
 
         // Create indexes
         for index in &schema.indexes {
@@ -245,7 +248,10 @@ impl DatabaseManager for MysqlManager {
             sqlx::query(&index_sql)
                 .execute(pool)
                 .await
-                .map_err(|e| DbError::SchemaError(e.to_string()))?;
+                .map_err(|e| DbError::SchemaError {
+                    table: Some(schema.name.clone()),
+                    message: e.to_string()
+                })?;
         }
 
         Ok(())
@@ -258,7 +264,10 @@ impl DatabaseManager for MysqlManager {
         sqlx::query(&sql)
             .execute(pool)
             .await
-            .map_err(|e| DbError::SchemaError(e.to_string()))?;
+            .map_err(|e| DbError::DropTableError {
+                table: table_name.to_string(),
+                message: e.to_string()
+            })?;
 
         Ok(())
     }
@@ -271,7 +280,10 @@ impl DatabaseManager for MysqlManager {
             .bind(table_name)
             .fetch_one(pool)
             .await
-            .map_err(|e| DbError::QueryError(e.to_string()))?;
+            .map_err(|e| DbError::QueryError {
+                table: None,
+                message: e.to_string()
+            })?;
 
         Ok(count.0 > 0)
     }
@@ -283,7 +295,10 @@ impl DatabaseManager for MysqlManager {
         let rows = sqlx::query(sql)
             .fetch_all(pool)
             .await
-            .map_err(|e| DbError::QueryError(e.to_string()))?;
+            .map_err(|e| DbError::QueryError {
+                table: None,
+                message: e.to_string()
+            })?;
 
         let tables = rows.iter()
             .map(|row| row.get::<String, _>(0))
@@ -304,7 +319,10 @@ impl DatabaseManager for MysqlManager {
             .bind(table_name)
             .fetch_all(pool)
             .await
-            .map_err(|e| DbError::QueryError(e.to_string()))?;
+            .map_err(|e| DbError::QueryError {
+                table: None,
+                message: e.to_string()
+            })?;
 
         let mut schema = TableSchema::new(table_name);
 
@@ -381,7 +399,10 @@ impl DatabaseManager for MysqlManager {
         let result = query
             .execute(pool)
             .await
-            .map_err(|e| DbError::QueryError(e.to_string()))?;
+            .map_err(|e| DbError::InsertError {
+                table: table.to_string(),
+                message: e.to_string()
+            })?;
 
         Ok(Value::BigInt(result.last_insert_id() as i64))
     }
@@ -466,7 +487,10 @@ impl DatabaseManager for MysqlManager {
         let rows = query
             .fetch_all(pool)
             .await
-            .map_err(|e| DbError::QueryError(e.to_string()))?;
+            .map_err(|e| DbError::QueryError {
+                table: Some(table.to_string()),
+                message: e.to_string()
+            })?;
 
         rows.iter().map(Self::row_from_mysql).collect()
     }
@@ -519,7 +543,10 @@ impl DatabaseManager for MysqlManager {
         let result = query
             .execute(pool)
             .await
-            .map_err(|e| DbError::QueryError(e.to_string()))?;
+            .map_err(|e| DbError::UpdateError {
+                table: table.to_string(),
+                message: e.to_string()
+            })?;
 
         Ok(result.rows_affected() as usize)
     }
@@ -552,7 +579,10 @@ impl DatabaseManager for MysqlManager {
         let result = query
             .execute(pool)
             .await
-            .map_err(|e| DbError::QueryError(e.to_string()))?;
+            .map_err(|e| DbError::DeleteError {
+                table: table.to_string(),
+                message: e.to_string()
+            })?;
 
         Ok(result.rows_affected() as usize)
     }
@@ -585,7 +615,10 @@ impl DatabaseManager for MysqlManager {
         let count: (i64,) = query
             .fetch_one(pool)
             .await
-            .map_err(|e| DbError::QueryError(e.to_string()))?;
+            .map_err(|e| DbError::QueryError {
+                table: Some(table.to_string()),
+                message: e.to_string()
+            })?;
 
         Ok(count.0 as usize)
     }

@@ -1,0 +1,33 @@
+[package]
+name = "database_manager"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1.89"
+address = { git = "https://github.com/ThePhoenixPixel/address.git", branch = "add-serde-support" }
+serde = { version = "1.0.228", features = ["derive"] }
+
+# Database dependencies (optional)
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "tls-native-tls"], optional = true }
+tokio = { version = "1.49.0", features = ["rt", "rt-multi-thread", "macros"] }
+
+[dev-dependencies]
+tokio = { version = "1.43", features = ["full"] }
+
+[features]
+default = ["serde"]
+serde = ["address/serde"]
+
+# Database driver features
+sqlite = ["sqlx", "sqlx/sqlite"]
+mysql = ["sqlx", "sqlx/mysql"]
+all-drivers = ["sqlite", "mysql"]
+
+[[example]]
+name = "sqlite_example"
+required-features = ["sqlite"]
+
+[[example]]
+name = "mysql_example"
+required-features = ["mysql"]

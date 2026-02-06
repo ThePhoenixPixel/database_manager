@@ -13,7 +13,7 @@ use crate::types::{
     {DbError, DbResult},
     {Column as DbColumn, ColumnType},
     OrderDirection,
-    {DBSmallInt, DBInteger, DBBigInt, DBFloat, DBDouble, DBText, DBBoolean, DBBlob},
+    { DBInt, DBFloat, DBBoolean, DBBlob, DBVarChar},
     QueryFilters,
     ForeignKeyAction,
     IndexType,
@@ -40,18 +40,15 @@ impl SqliteManager {
 
     fn column_type_to_sql(&self, col_type: &ColumnType) -> String {
         match col_type {
-            ColumnType::SmallInt => "INTEGER".to_string(),
-            ColumnType::Integer => "INTEGER".to_string(),
-            ColumnType::BigInt => "INTEGER".to_string(),
+            ColumnType::Int => "INTEGER".to_string(),
+            ColumnType::UInt => "INTEGER".to_string(),
             ColumnType::Float => "REAL".to_string(),
-            ColumnType::Double => "REAL".to_string(),
             ColumnType::Text => "TEXT".to_string(),
             ColumnType::VarChar(_) => "TEXT".to_string(), // SQLite doesn't enforce length
             ColumnType::Boolean => "INTEGER".to_string(), // SQLite uses 0/1 for boolean
             ColumnType::Date => "TEXT".to_string(),
             ColumnType::DateTime => "TEXT".to_string(),
-            ColumnType::Timestamp => "TEXT".to_string(),
-            ColumnType::Json => "TEXT".to_string(),
+            ColumnType::Timestamp => "INTEGER".to_string(),
             ColumnType::Blob => "BLOB".to_string(),
         }
     }
@@ -84,19 +81,16 @@ impl SqliteManager {
     fn value_to_sql(&self, value: &Value) -> String {
         match value {
             Value::Null => "NULL".to_string(),
-            Value::SmallInt(i) => i.0.to_string(),
-            Value::Integer(i) => i.0.to_string(),
-            Value::BigInt(i) => i.0.to_string(),
+            Value::Int(i) => i.0.to_string(),
+            Value::UInt(u) => (u.0 as i64).to_string(),
             Value::Float(f) => f.0.to_string(),
-            Value::Double(f) => f.0.to_string(),
             Value::Text(s) => format!("'{}'", s.0.replace("'", "''")),
-            Value::VarChar(s) => format!("'{}'", s.0.replace("'", "''")),
+            Value::VarChar(v) => format!("'{}'", v.value().replace("'", "''")),
             Value::Boolean(b) => if b.0 { "1" } else { "0" }.to_string(),
             Value::Date(d) => format!("'{}'", d.0.replace("'", "''")),
             Value::DateTime(d) => format!("'{}'", d.0.replace("'", "''")),
-            Value::Timestamp(d) => format!("'{}'", d.0.replace("'", "''")),
-            Value::Json(j) => format!("'{}'", j.0.replace("'", "''")),
-            Value::Blob(_) => "NULL".to_string(), // Binary data needs special handling
+            Value::Timestamp(ts) => ts.0.to_string(),
+            Value::Blob(_) => "NULL".to_string(),
         }
     }
 
@@ -107,17 +101,19 @@ impl SqliteManager {
             let name = column.name().to_string();
 
             let value = if let Ok(v) = row.try_get::<i64, _>(idx) {
-                Value::BigInt(DBBigInt(v))
+                Value::Int(DBInt(v))
             } else if let Ok(v) = row.try_get::<i32, _>(idx) {
-                Value::Integer(DBInteger(v))
+                Value::Int(DBInt(v as i64))
             } else if let Ok(v) = row.try_get::<i16, _>(idx) {
-                Value::SmallInt(DBSmallInt(v))
+                Value::Int(DBInt(v as i64))
             } else if let Ok(v) = row.try_get::<f64, _>(idx) {
-                Value::Double(DBDouble(v))
-            } else if let Ok(v) = row.try_get::<f32, _>(idx) {
                 Value::Float(DBFloat(v))
+            } else if let Ok(v) = row.try_get::<f32, _>(idx) {
+                Value::Float(DBFloat(v as f64))
             } else if let Ok(v) = row.try_get::<String, _>(idx) {
-                Value::Text(DBText(v))
+                Value::VarChar(DBVarChar::new(v, 255).unwrap_or_else(|_| {
+                    DBVarChar::new(String::new(), 255).unwrap()
+                }))
             } else if let Ok(v) = row.try_get::<bool, _>(idx) {
                 Value::Boolean(DBBoolean(v))
             } else if let Ok(v) = row.try_get::<Vec<u8>, _>(idx) {
@@ -135,18 +131,15 @@ impl SqliteManager {
     fn bind_value<'q>(query: sqlx::query::Query<'q, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'q>>, value: &'q Value) -> sqlx::query::Query<'q, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'q>> {
         match value {
             Value::Null => query.bind(None::<String>),
-            Value::SmallInt(i) => query.bind(i.0),
-            Value::Integer(i) => query.bind(i.0),
-            Value::BigInt(i) => query.bind(i.0),
+            Value::Int(i) => query.bind(i.0),
+            Value::UInt(u) => query.bind(u.0 as i64),
             Value::Float(f) => query.bind(f.0),
-            Value::Double(f) => query.bind(f.0),
             Value::Text(s) => query.bind(&s.0),
-            Value::VarChar(s) => query.bind(&s.0),
+            Value::VarChar(v) => query.bind(v.value()),
             Value::Boolean(b) => query.bind(if b.0 { 1 } else { 0 }),
             Value::Date(d) => query.bind(&d.0),
             Value::DateTime(d) => query.bind(&d.0),
-            Value::Timestamp(d) => query.bind(&d.0),
-            Value::Json(j) => query.bind(&j.0),
+            Value::Timestamp(ts) => query.bind(ts.0),
             Value::Blob(b) => query.bind(&b.0),
         }
     }
@@ -154,18 +147,15 @@ impl SqliteManager {
     fn bind_value_as<'q, O>(query: sqlx::query::QueryAs<'q, sqlx::Sqlite, O, sqlx::sqlite::SqliteArguments<'q>>, value: &'q Value) -> sqlx::query::QueryAs<'q, sqlx::Sqlite, O, sqlx::sqlite::SqliteArguments<'q>> {
         match value {
             Value::Null => query.bind(None::<String>),
-            Value::SmallInt(i) => query.bind(i.0),
-            Value::Integer(i) => query.bind(i.0),
-            Value::BigInt(i) => query.bind(i.0),
+            Value::Int(i) => query.bind(i.0),
+            Value::UInt(u) => query.bind(u.0 as i64),
             Value::Float(f) => query.bind(f.0),
-            Value::Double(f) => query.bind(f.0),
             Value::Text(s) => query.bind(&s.0),
-            Value::VarChar(s) => query.bind(&s.0),
+            Value::VarChar(v) => query.bind(v.value()),
             Value::Boolean(b) => query.bind(if b.0 { 1 } else { 0 }),
             Value::Date(d) => query.bind(&d.0),
             Value::DateTime(d) => query.bind(&d.0),
-            Value::Timestamp(d) => query.bind(&d.0),
-            Value::Json(j) => query.bind(&j.0),
+            Value::Timestamp(ts) => query.bind(ts.0),
             Value::Blob(b) => query.bind(&b.0),
         }
     }
@@ -323,7 +313,6 @@ impl DatabaseController for SqliteManager {
         Ok(tables)
     }
 
-
     async fn get_table_schema(&self, table_name: &str) -> DbResult<TableSchema> {
         let pool = self.get_pool()?;
 
@@ -346,8 +335,8 @@ impl DatabaseController for SqliteManager {
             let pk: i32 = row.get(5);
 
             let column_type = match type_str.to_uppercase().as_str() {
-                "INTEGER" => ColumnType::Integer,
-                "REAL" => ColumnType::Float,
+                "INTEGER" => ColumnType::Int,
+                "REAL" | "FLOAT" | "DOUBLE" => ColumnType::Float,
                 "TEXT" => ColumnType::Text,
                 "BLOB" => ColumnType::Blob,
                 _ => ColumnType::Text,
@@ -398,9 +387,8 @@ impl DatabaseController for SqliteManager {
                 message: e.to_string(),
             })?;
 
-        Ok(Value::BigInt(DBBigInt(result.last_insert_rowid())))
+        Ok(Value::Int(DBInt(result.last_insert_rowid())))
     }
-
 
     async fn query(&self, table: &str, filters: &QueryFilters) -> DbResult<Vec<Row>> {
         let pool = self.get_pool()?;
@@ -617,5 +605,4 @@ impl DatabaseController for SqliteManager {
 
         Ok(count.0 as usize)
     }
-
 }

@@ -6,7 +6,7 @@ use sqlx::{Row as SqlxRow};
 
 use crate::drivers::mysql::mysql_config::DBMysqlConfig;
 use crate::controller::DatabaseController;
-use crate::types::{Column as DbColumn, ColumnType, DbError, DbResult, Row, Value, TableSchema, QueryFilters, FilterOperator, OrderDirection, ForeignKeyAction, IndexType, DBSmallInt, DBInteger, DBBigInt, DBFloat, DBDouble, DBText, DBBoolean, DBBlob};
+use crate::types::{Column as DbColumn, ColumnType, DbError, DbResult, Row, Value, TableSchema, QueryFilters, FilterOperator, OrderDirection, ForeignKeyAction, IndexType, DBInt, DBFloat, DBBoolean, DBBlob, DBVarChar, DBUInt, DBText};
 
 pub struct MysqlManager {
     config: DBMysqlConfig,
@@ -29,18 +29,15 @@ impl MysqlManager {
 
     fn column_type_to_sql(&self, col_type: &ColumnType) -> String {
         match col_type {
-            ColumnType::SmallInt => "SMALLINT".to_string(),
-            ColumnType::Integer => "INT".to_string(),
-            ColumnType::BigInt => "BIGINT".to_string(),
+            ColumnType::Int => "BIGINT".to_string(),
+            ColumnType::UInt => "BIGINT UNSIGNED".to_string(),
             ColumnType::Float => "FLOAT".to_string(),
-            ColumnType::Double => "DOUBLE".to_string(),
             ColumnType::Text => "TEXT".to_string(),
             ColumnType::VarChar(len) => format!("VARCHAR({})", len),
             ColumnType::Boolean => "BOOLEAN".to_string(),
             ColumnType::Date => "DATE".to_string(),
             ColumnType::DateTime => "DATETIME".to_string(),
             ColumnType::Timestamp => "TIMESTAMP".to_string(),
-            ColumnType::Json => "JSON".to_string(),
             ColumnType::Blob => "BLOB".to_string(),
         }
     }
@@ -70,18 +67,15 @@ impl MysqlManager {
     fn value_to_sql(&self, value: &Value) -> String {
         match value {
             Value::Null => "NULL".to_string(),
-            Value::SmallInt(i) => i.0.to_string(),
-            Value::Integer(i) => i.0.to_string(),
-            Value::BigInt(i) => i.0.to_string(),
+            Value::Int(i) => i.0.to_string(),
+            Value::UInt(i) => i.0.to_string(),
             Value::Float(f) => f.0.to_string(),
-            Value::Double(f) => f.0.to_string(),
             Value::Text(s) => format!("'{}'", s.0.replace("'", "\\'")),
-            Value::VarChar(s) => format!("'{}'", s.0.replace("'", "\\'")),
+            Value::VarChar(v) => format!("'{}'", v.value().replace("'", "\\'")),
             Value::Boolean(b) => if b.0 { "TRUE" } else { "FALSE" }.to_string(),
             Value::Date(d) => format!("'{}'", d.0.replace("'", "\\'")),
             Value::DateTime(d) => format!("'{}'", d.0.replace("'", "\\'")),
-            Value::Timestamp(d) => format!("'{}'", d.0.replace("'", "\\'")),
-            Value::Json(j) => format!("'{}'", j.0.replace("'", "\\'")),
+            Value::Timestamp(ts) => ts.0.to_string(),
             Value::Blob(_) => "NULL".to_string(), // Binary data needs special handling
         }
     }
@@ -92,20 +86,32 @@ impl MysqlManager {
         for (idx, column) in row.columns().iter().enumerate() {
             let name = column.name().to_string();
 
-            let value = if let Ok(v) = row.try_get::<i64, _>(idx) {
-                Value::BigInt(DBBigInt(v))
+            let value = if let Ok(v) = row.try_get::<u64, _>(idx) {
+                // Unsigned integer
+                Value::UInt(DBUInt(v))
+            } else if let Ok(v) = row.try_get::<i64, _>(idx) {
+                Value::Int(DBInt(v))
+            } else if let Ok(v) = row.try_get::<u32, _>(idx) {
+                Value::UInt(DBUInt(v as u64))
             } else if let Ok(v) = row.try_get::<i32, _>(idx) {
-                Value::Integer(DBInteger(v))
+                Value::Int(DBInt(v as i64))
+            } else if let Ok(v) = row.try_get::<u16, _>(idx) {
+                Value::UInt(DBUInt(v as u64))
             } else if let Ok(v) = row.try_get::<i16, _>(idx) {
-                Value::SmallInt(DBSmallInt(v))
+                Value::Int(DBInt(v as i64))
+            } else if let Ok(v) = row.try_get::<u8, _>(idx) {
+                Value::UInt(DBUInt(v as u64))
+            } else if let Ok(v) = row.try_get::<i8, _>(idx) {
+                Value::Int(DBInt(v as i64))
             } else if let Ok(v) = row.try_get::<f64, _>(idx) {
-                Value::Double(DBDouble(v))
-            } else if let Ok(v) = row.try_get::<f32, _>(idx) {
                 Value::Float(DBFloat(v))
-            } else if let Ok(v) = row.try_get::<String, _>(idx) {
-                Value::Text(DBText(v))
+            } else if let Ok(v) = row.try_get::<f32, _>(idx) {
+                Value::Float(DBFloat(v as f64))
             } else if let Ok(v) = row.try_get::<bool, _>(idx) {
                 Value::Boolean(DBBoolean(v))
+            } else if let Ok(v) = row.try_get::<String, _>(idx) {
+                // Erstmal als Text behandeln - VARCHAR-Info fehlt beim Lesen
+                Value::Text(DBText(v))
             } else if let Ok(v) = row.try_get::<Vec<u8>, _>(idx) {
                 Value::Blob(DBBlob(v))
             } else {
@@ -121,18 +127,15 @@ impl MysqlManager {
     fn bind_value<'q>(query: sqlx::query::Query<'q, sqlx::MySql, sqlx::mysql::MySqlArguments>, value: &'q Value) -> sqlx::query::Query<'q, sqlx::MySql, sqlx::mysql::MySqlArguments> {
         match value {
             Value::Null => query.bind(None::<String>),
-            Value::SmallInt(i) => query.bind(i.0),
-            Value::Integer(i) => query.bind(i.0),
-            Value::BigInt(i) => query.bind(i.0),
+            Value::Int(i) => query.bind(i.0),
+            Value::UInt(i) => query.bind(i.0),
             Value::Float(f) => query.bind(f.0),
-            Value::Double(f) => query.bind(f.0),
             Value::Text(s) => query.bind(&s.0),
-            Value::VarChar(s) => query.bind(&s.0),
+            Value::VarChar(v) => query.bind(v.value()),
             Value::Boolean(b) => query.bind(b.0),
             Value::Date(d) => query.bind(&d.0),
             Value::DateTime(d) => query.bind(&d.0),
-            Value::Timestamp(d) => query.bind(&d.0),
-            Value::Json(j) => query.bind(&j.0),
+            Value::Timestamp(ts) => query.bind(ts.0),
             Value::Blob(b) => query.bind(&b.0),
         }
     }
@@ -140,18 +143,15 @@ impl MysqlManager {
     fn bind_value_as<'q, O>(query: sqlx::query::QueryAs<'q, sqlx::MySql, O, sqlx::mysql::MySqlArguments>, value: &'q Value) -> sqlx::query::QueryAs<'q, sqlx::MySql, O, sqlx::mysql::MySqlArguments> {
         match value {
             Value::Null => query.bind(None::<String>),
-            Value::SmallInt(i) => query.bind(i.0),
-            Value::Integer(i) => query.bind(i.0),
-            Value::BigInt(i) => query.bind(i.0),
+            Value::Int(i) => query.bind(i.0),
+            Value::UInt(i) => query.bind(i.0),
             Value::Float(f) => query.bind(f.0),
-            Value::Double(f) => query.bind(f.0),
             Value::Text(s) => query.bind(&s.0),
-            Value::VarChar(s) => query.bind(&s.0),
+            Value::VarChar(v) => query.bind(v.value()),
             Value::Boolean(b) => query.bind(b.0),
             Value::Date(d) => query.bind(&d.0),
             Value::DateTime(d) => query.bind(&d.0),
-            Value::Timestamp(d) => query.bind(&d.0),
-            Value::Json(j) => query.bind(&j.0),
+            Value::Timestamp(ts) => query.bind(ts.0),
             Value::Blob(b) => query.bind(&b.0),
         }
     }
@@ -319,7 +319,7 @@ impl DatabaseController for MysqlManager {
     async fn get_table_schema(&self, table_name: &str) -> DbResult<TableSchema> {
         let pool = self.get_pool()?;
 
-        let sql = "SELECT column_name, data_type, is_nullable, column_key, extra
+        let sql = "SELECT column_name, data_type, character_maximum_length, is_nullable, column_key, extra
                    FROM information_schema.columns
                    WHERE table_schema = DATABASE() AND table_name = ?
                    ORDER BY ordinal_position";
@@ -338,24 +338,24 @@ impl DatabaseController for MysqlManager {
         for row in rows {
             let name: String = row.get(0);
             let type_str: String = row.get(1);
-            let is_nullable: String = row.get(2);
-            let column_key: String = row.get(3);
-            let extra: String = row.get(4);
+            let char_max_length: Option<i64> = row.get(2);
+            let is_nullable: String = row.get(3);
+            let column_key: String = row.get(4);
+            let extra: String = row.get(5);
 
             let column_type = match type_str.to_uppercase().as_str() {
-                "TINYINT" | "SMALLINT" => ColumnType::SmallInt,
-                "INT" | "INTEGER" => ColumnType::Integer,
-                "BIGINT" => ColumnType::BigInt,
-                "FLOAT" => ColumnType::Float,
-                "DOUBLE" => ColumnType::Double,
-                "TEXT" | "LONGTEXT" | "MEDIUMTEXT" => ColumnType::Text,
-                "VARCHAR" => ColumnType::VarChar(255),
+                "TINYINT" | "SMALLINT" | "INT" | "INTEGER" | "BIGINT" | "MEDIUMINT" => ColumnType::Int,
+                "FLOAT" | "DOUBLE" | "DECIMAL" | "NUMERIC" => ColumnType::Float,
+                "VARCHAR" | "CHAR" => {
+                    let len = char_max_length.unwrap_or(255) as usize;
+                    ColumnType::VarChar(len)
+                },
+                "TEXT" | "LONGTEXT" | "MEDIUMTEXT" | "JSON" => ColumnType::Text,
                 "BOOLEAN" | "TINYINT(1)" => ColumnType::Boolean,
                 "DATE" => ColumnType::Date,
                 "DATETIME" => ColumnType::DateTime,
                 "TIMESTAMP" => ColumnType::Timestamp,
-                "JSON" => ColumnType::Json,
-                "BLOB" => ColumnType::Blob,
+                "BLOB" | "LONGBLOB" | "MEDIUMBLOB" | "BINARY" | "VARBINARY" => ColumnType::Blob,
                 _ => ColumnType::Text,
             };
 
@@ -413,7 +413,7 @@ impl DatabaseController for MysqlManager {
                 message: e.to_string()
             })?;
 
-        Ok(Value::BigInt(DBBigInt::from(result.last_insert_id() as i64)))
+        Ok(Value::from(result.last_insert_id()))
     }
 
     async fn query(&self, table: &str, filters: &QueryFilters) -> DbResult<Vec<Row>> {

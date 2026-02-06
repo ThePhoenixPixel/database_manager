@@ -2,39 +2,16 @@ use crate::types::value::Value;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ColumnType {
-    SmallInt,
-    Integer,
-    BigInt,
+    Int,
+    UInt,
     Float,
-    Double,
     Text,
     VarChar(usize),
     Boolean,
     Date,
     DateTime,
     Timestamp,
-    Json,
     Blob,
-}
-
-impl ColumnType {
-    pub fn type_name(&self) -> &'static str {
-        match self {
-            ColumnType::SmallInt => "SMALLINT",
-            ColumnType::Integer => "INTEGER",
-            ColumnType::BigInt => "BIGINT",
-            ColumnType::Float => "FLOAT",
-            ColumnType::Double => "DOUBLE",
-            ColumnType::Text => "TEXT",
-            ColumnType::VarChar(_) => "VARCHAR",
-            ColumnType::Boolean => "BOOLEAN",
-            ColumnType::Date => "DATE",
-            ColumnType::DateTime => "DATETIME",
-            ColumnType::Timestamp => "TIMESTAMP",
-            ColumnType::Json => "JSON",
-            ColumnType::Blob => "BLOB",
-        }
-    }
 }
 
 #[derive(Debug, Clone)]

@@ -10,11 +10,11 @@ use database_manager::drivers::mysql::{DBMysqlConfig, MysqlManager};
 struct User {
     #[primary_key]
     #[auto_increment]
-    id: DBInteger,
+    id: DBUInt,
 
     name: DBText,
     email: DBText,
-    age: DBInteger,
+    age: DBInt,
 }
 
 #[tokio::main]
@@ -36,21 +36,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Inserting Users ===\n");
 
     let alice = User {
-        id: 0.into(), // wird ignoriert wegen auto_increment
+        id: 0u16.into(), // wird ignoriert wegen auto_increment
         name: "Alice".into(),
         email: "alice@example.com".into(),
         age: 30.into(),
     };
 
     let bob = User {
-        id: 0.into(),
+        id: 0u16.into(),
         name: "Bob".into(),
         email: "bob@example.com".into(),
         age: 25.into(),
     };
 
     let charlie = User {
-        id: 0.into(),
+        id: 0u16.into(),
         name: "Charlie".into(),
         email: "charlie@example.com".into(),
         age: 35.into(),

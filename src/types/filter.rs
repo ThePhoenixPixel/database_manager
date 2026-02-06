@@ -1,5 +1,5 @@
 pub use crate::types::{FilterOperator, OrderDirection};
-use crate::types::value::Value;
+use crate::types::value::{Value, DBText};
 
 #[derive(Debug, Clone)]
 pub struct Filter {
@@ -50,7 +50,7 @@ impl Filter {
         Self {
             column: column.into(),
             operator: FilterOperator::Like,
-            value: Some(Value::Text(pattern)),
+            value: Some(Value::Text(DBText(pattern))),
             values: None,
         }
     }

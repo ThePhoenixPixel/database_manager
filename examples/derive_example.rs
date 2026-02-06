@@ -3,9 +3,9 @@ use database_manager::{
     DatabaseManager, Table,
     config::DatabaseConfig,
     drivers::sqlite::DBSqliteConfig,
-    types::{DbText, DbInteger, DbBoolean, Value, Row, Filter, FilterOperator, QueryFilters},
 };
 use std::collections::HashMap;
+use database_manager::types::*;
 
 // Define a table using struct with derive macro
 #[derive(Table)]
@@ -13,14 +13,14 @@ use std::collections::HashMap;
 struct Users {
     #[primary_key]
     #[auto_increment]
-    id: DbInteger,
+    id: DBInteger,
 
-    name: DbText,
-    email: DbText,
-    age: DbInteger,
+    name: DBText,
+    email: DBText,
+    age: DBInteger,
 
     #[nullable]
-    bio: DbText,
+    bio: DBText,
 }
 
 // Another table example
@@ -28,12 +28,12 @@ struct Users {
 struct Posts {
     #[primary_key]
     #[auto_increment]
-    id: DbInteger,
+    id: DBInteger,
 
-    user_id: DbInteger,
-    title: DbText,
-    content: DbText,
-    published: DbBoolean,
+    user_id: DBInteger,
+    title: DBText,
+    content: DBText,
+    published: DBBoolean,
 }
 
 #[tokio::main]
@@ -63,28 +63,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Insert users
     let mut user1 = HashMap::new();
-    user1.insert("name".to_string(), Value::Text("Alice".to_string()));
-    user1.insert("email".to_string(), Value::Text("alice@example.com".to_string()));
-    user1.insert("age".to_string(), Value::Integer(30));
-    user1.insert("bio".to_string(), Value::Text("Software developer".to_string()));
+    user1.insert("name".to_string(), Value::from("Alice".to_string()));
+    user1.insert("email".to_string(), Value::from("alice@example.com".to_string()));
+    user1.insert("age".to_string(), Value::from(30));
+    user1.insert("bio".to_string(), Value::from("Software developer".to_string()));
 
     let user1_id = manager.insert(Users::table_name(), &user1).await?;
     println!("✓ Inserted user Alice with ID: {:?}", user1_id);
 
     let mut user2 = HashMap::new();
-    user2.insert("name".to_string(), Value::Text("Bob".to_string()));
-    user2.insert("email".to_string(), Value::Text("bob@example.com".to_string()));
-    user2.insert("age".to_string(), Value::Integer(25));
+    user2.insert("name".to_string(), Value::from("Bob".to_string()));
+    user2.insert("email".to_string(), Value::from("bob@example.com".to_string()));
+    user2.insert("age".to_string(), Value::from(25));
     user2.insert("bio".to_string(), Value::Null);
 
     let user2_id = manager.insert(Users::table_name(), &user2).await?;
     println!("✓ Inserted user Bob with ID: {:?}", user2_id);
 
     let mut user3 = HashMap::new();
-    user3.insert("name".to_string(), Value::Text("Charlie".to_string()));
-    user3.insert("email".to_string(), Value::Text("charlie@example.com".to_string()));
-    user3.insert("age".to_string(), Value::Integer(35));
-    user3.insert("bio".to_string(), Value::Text("Tech lead".to_string()));
+    user3.insert("name".to_string(), Value::from("Charlie".to_string()));
+    user3.insert("email".to_string(), Value::from("charlie@example.com".to_string()));
+    user3.insert("age".to_string(), Value::from(35));
+    user3.insert("bio".to_string(), Value::from("Tech lead".to_string()));
 
     let user3_id = manager.insert(Users::table_name(), &user3).await?;
     println!("✓ Inserted user Charlie with ID: {:?}\n", user3_id);
@@ -92,18 +92,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Insert posts
     let mut post1 = HashMap::new();
     post1.insert("user_id".to_string(), user1_id.clone());
-    post1.insert("title".to_string(), Value::Text("My First Post".to_string()));
-    post1.insert("content".to_string(), Value::Text("Hello World!".to_string()));
-    post1.insert("published".to_string(), Value::Boolean(true));
+    post1.insert("title".to_string(), Value::from("My First Post".to_string()));
+    post1.insert("content".to_string(), Value::from("Hello World!".to_string()));
+    post1.insert("published".to_string(), Value::from(true));
 
     let post1_id = manager.insert(Posts::table_name(), &post1).await?;
     println!("✓ Inserted post 1 with ID: {:?}", post1_id);
 
     let mut post2 = HashMap::new();
     post2.insert("user_id".to_string(), user1_id.clone());
-    post2.insert("title".to_string(), Value::Text("Draft Post".to_string()));
-    post2.insert("content".to_string(), Value::Text("Work in progress...".to_string()));
-    post2.insert("published".to_string(), Value::Boolean(false));
+    post2.insert("title".to_string(), Value::from("Draft Post".to_string()));
+    post2.insert("content".to_string(), Value::from("Work in progress...".to_string()));
+    post2.insert("published".to_string(), Value::from(false));
 
     let post2_id = manager.insert(Posts::table_name(), &post2).await?;
     println!("✓ Inserted post 2 with ID: {:?}\n", post2_id);
@@ -173,8 +173,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Updating Data ===\n");
 
     let mut update_data = HashMap::new();
-    update_data.insert("age".to_string(), Value::Integer(31));
-    update_data.insert("bio".to_string(), Value::Text("Senior Software Developer".to_string()));
+    update_data.insert("age".to_string(), Value::from(31));
+    update_data.insert("bio".to_string(), Value::from("Senior Software Developer"));
 
     let mut update_filter = QueryFilters::new();
  //   update_filter.add(Filter::new("name", FilterOperator::Equals, Some(Value::Text("Alice".to_string()))));

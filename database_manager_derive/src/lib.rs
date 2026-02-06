@@ -73,7 +73,7 @@ pub fn derive_table(input: TokenStream) -> TokenStream {
             to_row_fields.push(quote! {
                 row.insert(
                     #field_name_str.to_string(),
-                    database_manager::types::DbType::to_value(&self.#field_name)
+                    database_manager::types::DbType::to_value(self.#field_name.clone())
                 );
             });
         }

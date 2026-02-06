@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "sqlite")]
-use crate::drivers::sqlite::DBSqliteConfig;
+use crate::drivers::sqlite::sqlite_config::DBSqliteConfig;
 
 
 #[cfg(feature = "mysql")]
-use crate::drivers::mysql::DBMysqlConfig;
+use crate::drivers::mysql::mysql_config::DBMysqlConfig;
 
 
 

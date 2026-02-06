@@ -1,11 +1,18 @@
-use database_manager_derive::Table;
-use database_manager::config::DatabaseConfig;
-use database_manager::{DatabaseManager, Table};
+use database_manager::config::{DatabaseConfig};
+use database_manager::{DatabaseManager, Table, TableDerive};
 use database_manager::types::*;
-use database_manager::drivers::sqlite::{DBSqliteConfig, SqliteManager};
-use database_manager::drivers::mysql::{DBMysqlConfig, MysqlManager};
 
-#[derive(Table, Debug, Clone)]
+
+
+#[cfg(feature = "sqlite")]
+use database_manager::config::DBSqliteConfig;
+
+#[cfg(feature = "mysql")]
+use database_manager::config::DBMysqlConfig;
+
+
+
+#[derive(TableDerive, Debug, Clone)]
 #[table_name = "users"]
 struct User {
     #[primary_key]
@@ -21,11 +28,23 @@ struct User {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Struct Insert & Query Example ===\n");
 
-    // Setup
-    let sqlite_config = DatabaseConfig::Sqlite(DBSqliteConfig::new("test.db"));
-    let mysql_config = DatabaseConfig::Mysql(DBMysqlConfig::from_parts("192.168.178.22", 3306, "phoenix", "codergames2022", "phoenix", 10).expect("Cant mysql config"));
 
+
+    #[cfg(feature = "sqlite")]
+    let sqlite_config = DatabaseConfig::Sqlite(DBSqliteConfig::new("test.db"));
+
+    #[cfg(feature = "mysql")]
+    let mysql_config = DatabaseConfig::Mysql(DBMysqlConfig::from_parts("localhost", 3306, "user", "password", "database", 10)?);
+    
+    // Create Database Manager
+    #[cfg(feature = "sqlite")]
+    let mut manager = DatabaseManager::new(sqlite_config)?;
+
+    #[cfg(feature = "mysql")]
     let mut manager = DatabaseManager::new(mysql_config)?;
+
+
+
     manager.connect().await?;
 
     // Sync table
@@ -36,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Inserting Users ===\n");
 
     let alice = User {
-        id: 0u16.into(), // wird ignoriert wegen auto_increment
+        id: 0u16.into(), // ignore if auto_increment true
         name: "Alice".into(),
         email: "alice@example.com".into(),
         age: 30.into(),

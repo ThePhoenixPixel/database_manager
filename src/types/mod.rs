@@ -1,18 +1,13 @@
 use std::collections::HashMap;
 
-pub use crate::types::value::*; // Export all DB types (DBInteger, DBText, etc.)
-pub use crate::types::column::Column;
-pub use crate::types::column::ColumnType;
-pub use crate::types::filter::Filter;
-pub use crate::types::filter::QueryFilters;
-pub use crate::types::index::Index;
-pub use crate::types::index::IndexType;
+pub use crate::types::value::*;
+pub use crate::types::column::*;
+pub use crate::types::filter::*;
+pub use crate::types::index::*;
 pub use crate::types::table_schema::TableSchema;
 pub use crate::types::alter_table::AlterTableOperation;
-pub use crate::types::foreign_key::ForeignKey;
-pub use crate::types::foreign_key::ForeignKeyAction;
-pub use crate::types::error::DbResult;
-pub use crate::types::error::DbError;
+pub use crate::types::foreign_key::*;
+pub use crate::types::error::*;
 
 mod value;
 mod column;

@@ -1,5 +1,6 @@
 .idea
 /target
+/examples/derive_example.rs
 /examples/mysql_example.rs
 /examples/sqlite_example.rs
 

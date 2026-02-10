@@ -1,3 +1,4 @@
+use chrono::Utc;
 use crate::types::{ColumnType, DbError, DbResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -46,11 +47,34 @@ impl DBVarChar {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct DBDate(pub String);
 
+impl DBDate {
+    pub fn get_now() -> DBDate {
+        let time = Utc::now();
+        DBDate(time.format("%Y-%m-%d").to_string())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct DBDatetime(pub String);
 
+impl DBDatetime {
+    pub fn get_now() -> DBDatetime {
+        let time = Utc::now();
+        DBDatetime(time.format("%Y-%m-%d %H:%M:%S").to_string())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct DBTimestamp(pub i64);
+
+
+impl DBTimestamp {
+    pub fn get_now() -> DBTimestamp {
+        let time = Utc::now();
+        DBTimestamp(time.timestamp())
+    }
+}
+
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct DBBlob(pub Vec<u8>);

@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1.89"
+chrono = "0.4.43"
 address = { git = "https://github.com/ThePhoenixPixel/address.git", branch = "add-serde-support" }
 serde = { version = "1.0.228", features = ["derive"] }
 

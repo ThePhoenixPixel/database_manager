@@ -37,7 +37,7 @@ pub trait Table: Sized {
     }
 
     /// Inserts this struct instance into the database
-    async fn create<M: DatabaseController>(&self, manager: &M) -> DbResult<Value> {
+    async fn insert<M: DatabaseController>(&self, manager: &M) -> DbResult<Value> {
         let table_name = Self::table_name();
         let row = self.to_row();
         manager.insert(table_name, &row).await

@@ -3,6 +3,7 @@ use address::Authority;
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug)]
 pub struct DBMysqlConfig {
     host: Authority,
     username: String,

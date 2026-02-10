@@ -43,6 +43,24 @@ pub trait Table: Sized {
         manager.insert(table_name, &row).await
     }
 
+    /// Update this struct into the database
+    async fn update<M, F>(&self, manager: &M, filters: F) -> DbResult<usize>
+    where
+        M: DatabaseController,
+        F: AsRef<QueryFilters> + Send,
+    {
+        manager.update(Self::table_name(), filters.as_ref(), &self.to_row()).await
+    }
+
+    /// Delete this struct from the database
+    async fn delete<M, F>(&self, manager: &M, filters: F) -> DbResult<usize>
+    where
+        M: DatabaseController,
+        F: AsRef<QueryFilters> + Send,
+    {
+        manager.delete(Self::table_name(), filters.as_ref()).await
+    }
+
     /// Query all records and convert to Vec<Self>
     async fn all<M: DatabaseController>(manager: &M) -> DbResult<Vec<Self>> {
         let rows = manager.query(Self::table_name(), &QueryFilters::new()).await?;

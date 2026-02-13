@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use async_trait::async_trait;
-use sqlx::{Column};
+use chrono::NaiveDateTime;
+use sqlx::{Column, TypeInfo, ValueRef};
 use sqlx::mysql::{MySqlPool, MySqlPoolOptions, MySqlRow};
 use sqlx::{Row as SqlxRow};
 
@@ -81,40 +82,38 @@ impl MysqlManager {
     }
 
     fn row_from_mysql(row: &MySqlRow) -> DbResult<Row> {
-        let mut result = HashMap::new();
+        let mut result = std::collections::HashMap::new();
 
         for (idx, column) in row.columns().iter().enumerate() {
             let name = column.name().to_string();
 
-            let value = if let Ok(v) = row.try_get::<u64, _>(idx) {
-                // Unsigned integer
-                Value::UInt(DBUInt(v))
-            } else if let Ok(v) = row.try_get::<i64, _>(idx) {
-                Value::Int(DBInt(v))
-            } else if let Ok(v) = row.try_get::<u32, _>(idx) {
-                Value::UInt(DBUInt(v as u64))
-            } else if let Ok(v) = row.try_get::<i32, _>(idx) {
-                Value::Int(DBInt(v as i64))
-            } else if let Ok(v) = row.try_get::<u16, _>(idx) {
-                Value::UInt(DBUInt(v as u64))
-            } else if let Ok(v) = row.try_get::<i16, _>(idx) {
-                Value::Int(DBInt(v as i64))
-            } else if let Ok(v) = row.try_get::<u8, _>(idx) {
-                Value::UInt(DBUInt(v as u64))
-            } else if let Ok(v) = row.try_get::<i8, _>(idx) {
-                Value::Int(DBInt(v as i64))
-            } else if let Ok(v) = row.try_get::<f64, _>(idx) {
-                Value::Float(DBFloat(v))
-            } else if let Ok(v) = row.try_get::<f32, _>(idx) {
-                Value::Float(DBFloat(v as f64))
-            } else if let Ok(v) = row.try_get::<bool, _>(idx) {
-                Value::Boolean(DBBoolean(v))
-            } else if let Ok(v) = row.try_get::<String, _>(idx) {
-                // Erstmal als Text behandeln - VARCHAR-Info fehlt beim Lesen
-                Value::Text(DBText(v))
-            } else if let Ok(v) = row.try_get::<Vec<u8>, _>(idx) {
-                Value::Blob(DBBlob(v))
+            // Prüfe auf die Typen, nullable Felder als Option abfragen
+            let value = if let Ok(v) = row.try_get::<Option<u64>, _>(idx) {
+                v.map(DBUInt).map(Value::UInt).unwrap_or(Value::Null)
+            } else if let Ok(v) = row.try_get::<Option<i64>, _>(idx) {
+                v.map(DBInt).map(Value::Int).unwrap_or(Value::Null)
+            } else if let Ok(v) = row.try_get::<Option<f64>, _>(idx) {
+                v.map(DBFloat).map(Value::Float).unwrap_or(Value::Null)
+            } else if let Ok(v) = row.try_get::<Option<f32>, _>(idx) {
+                v.map(|vv| DBFloat(vv as f64)).map(Value::Float).unwrap_or(Value::Null)
+            } else if let Ok(v) = row.try_get::<Option<bool>, _>(idx) {
+                v.map(DBBoolean).map(Value::Boolean).unwrap_or(Value::Null)
+            } else if let Ok(v) = row.try_get::<Option<String>, _>(idx) {
+                v.map(DBText).map(Value::Text).unwrap_or(Value::Null)
+            } else if let Ok(v) = row.try_get::<Option<Vec<u8>>, _>(idx) {
+                v.map(DBBlob).map(Value::Blob).unwrap_or(Value::Null)
+            } else if let Ok(v) = row.try_get::<Option<chrono::NaiveDate>, _>(idx) {
+                v.map(|vv| Value::Date(DBDate(vv.format("%Y-%m-%d").to_string())))
+                    .unwrap_or(Value::Null)
+            } else if let Ok(v) = row.try_get::<Option<chrono::NaiveDateTime>, _>(idx) {
+                v.map(|vv| Value::DateTime(DBDatetime(vv.format("%Y-%m-%d %H:%M:%S").to_string())))
+                    .unwrap_or(Value::Null)
+            } else if let Ok(v) = row.try_get::<Option<chrono::NaiveDateTime>, _>(idx) {
+                // Timestamp fallback
+                v.map(|vv| Value::Timestamp(DBTimestamp(vv.timestamp())))
+                    .unwrap_or(Value::Null)
             } else {
+                // Alles andere oder nicht behandelbar → Null
                 Value::Null
             };
 
@@ -123,6 +122,8 @@ impl MysqlManager {
 
         Ok(result)
     }
+
+
 
     fn bind_value<'q>(query: sqlx::query::Query<'q, sqlx::MySql, sqlx::mysql::MySqlArguments>, value: &'q Value) -> sqlx::query::Query<'q, sqlx::MySql, sqlx::mysql::MySqlArguments> {
         match value {

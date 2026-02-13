@@ -13,6 +13,7 @@ pub enum DbError {
     DropTableError { table: String, message: String },
     NotFound(String),
     InvalidData(String),
+    SqlxError(String),
 }
 
 impl fmt::Display for DbError {
@@ -50,10 +51,18 @@ impl fmt::Display for DbError {
             }
             DbError::NotFound(msg) => write!(f, "Not found: {}", msg),
             DbError::InvalidData(msg) => write!(f, "Invalid data: {}", msg),
+            DbError::SqlxError(msg) => write!(f, "Sqlx Error: {}", msg),
         }
     }
 }
 
 impl Error for DbError {}
+
+impl From<sqlx::Error> for DbError {
+    fn from(err: sqlx::Error) -> Self {
+        DbError::SqlxError(err.to_string())
+    }
+}
+
 
 pub type DbResult<T> = Result<T, DbError>;

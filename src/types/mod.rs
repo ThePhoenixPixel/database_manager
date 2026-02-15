@@ -18,7 +18,6 @@ mod index;
 mod foreign_key;
 mod alter_table;
 
-
 pub type Row = HashMap<String, Value>;
 
 #[derive(Debug, Clone)]
@@ -42,3 +41,27 @@ pub enum FilterOperator {
     IsNotNull,
 }
 
+#[derive(Clone)]
+pub enum JoinType {
+    Inner,
+    Left,
+    Right,
+}
+
+impl JoinType {
+    fn to_sql(&self) -> &'static str {
+        match self {
+            JoinType::Inner => "INNER",
+            JoinType::Left => "LEFT",
+            JoinType::Right => "RIGHT",
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct JoinClause {
+    pub table: String,
+    pub left: String,
+    pub right: String,
+    pub join_type: JoinType,
+}

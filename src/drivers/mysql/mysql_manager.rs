@@ -513,6 +513,97 @@ impl DatabaseController for MysqlManager {
         Ok(results.pop())
     }
 
+    async fn query_with_join(
+        &self,
+        base_table: &str,
+        joins: Vec<(&str, &str, &str)>, // Vec<(join_table, base_column, join_column)>
+        filters: &QueryFilters,
+    ) -> DbResult<Vec<Row>> {
+        let pool = self.get_pool()?;
+
+        // Basis-SQL
+        let mut sql = format!("SELECT {}.*", base_table);
+
+        // Optional: Alle Spalten der Join-Tabellen hinzufügen
+        for (join_table, _, _) in &joins {
+            sql.push_str(&format!(", {}.*", join_table));
+        }
+
+        sql.push_str(&format!(" FROM {}", base_table));
+
+        // JOINs hinzufügen
+        for (join_table, base_col, join_col) in &joins {
+            sql.push_str(&format!(" LEFT JOIN {} ON {}.{} = {}.{}",
+                                  join_table, base_table, base_col, join_table, join_col));
+        }
+
+        // WHERE-Klausel basierend auf Filter
+        if !filters.filters.is_empty() {
+            let conditions: Vec<String> = filters.filters.iter()
+                .map(|f| match f.operator {
+                    FilterOperator::Equals => format!("{} = ?", f.column),
+                    FilterOperator::NotEquals => format!("{} != ?", f.column),
+                    FilterOperator::GreaterThan => format!("{} > ?", f.column),
+                    FilterOperator::LessThan => format!("{} < ?", f.column),
+                    FilterOperator::GreaterOrEqual => format!("{} >= ?", f.column),
+                    FilterOperator::LessOrEqual => format!("{} <= ?", f.column),
+                    FilterOperator::Like => format!("{} LIKE ?", f.column),
+                    FilterOperator::IsNull => format!("{} IS NULL", f.column),
+                    FilterOperator::IsNotNull => format!("{} IS NOT NULL", f.column),
+                    FilterOperator::In => {
+                        let count = f.values.as_ref().map(|v| v.len()).unwrap_or(0);
+                        let placeholders = vec!["?"; count].join(", ");
+                        format!("{} IN ({})", f.column, placeholders)
+                    }
+                    FilterOperator::Between => format!("{} BETWEEN ? AND ?", f.column),
+                })
+                .collect();
+            sql.push_str(&format!(" WHERE {}", conditions.join(" AND ")));
+        }
+
+        // ORDER, LIMIT, OFFSET
+        if let Some(order) = &filters.order_by {
+            let order_clauses: Vec<String> = order.iter()
+                .map(|(col, dir)| match dir {
+                    OrderDirection::Asc => format!("{} ASC", col),
+                    OrderDirection::Desc => format!("{} DESC", col),
+                })
+                .collect();
+            sql.push_str(&format!(" ORDER BY {}", order_clauses.join(", ")));
+        }
+
+        if let Some(limit) = filters.limit {
+            sql.push_str(&format!(" LIMIT {}", limit));
+        }
+
+        if let Some(offset) = filters.offset {
+            sql.push_str(&format!(" OFFSET {}", offset));
+        }
+
+        // Query binden
+        let mut query = sqlx::query(&sql);
+        for filter in &filters.filters {
+            if let Some(value) = &filter.value {
+                query = Self::bind_value(query, value);
+            } else if let Some(values) = &filter.values {
+                if let Some(value) = values.first() {
+                    query = Self::bind_value(query, value);
+                }
+            }
+        }
+
+        // Ausführen und in Rows umwandeln
+        let rows = query
+            .fetch_all(pool)
+            .await
+            .map_err(|e| DbError::QueryError {
+                table: Some(base_table.to_string()),
+                message: e.to_string(),
+            })?;
+
+        rows.iter().map(Self::row_from_mysql).collect()
+    }
+
     async fn update(&self, table: &str, filters: &QueryFilters, data: &Row) -> DbResult<usize> {
         let pool = self.get_pool()?;
 

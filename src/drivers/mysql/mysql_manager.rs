@@ -516,7 +516,7 @@ impl DatabaseController for MysqlManager {
     async fn query_with_join(
         &self,
         base_table: &str,
-        joins: Vec<(&str, &str, &str)>, // Vec<(join_table, base_column, join_column)>
+        joins: Vec<(&str, String, String)>, // Vec<(join_table, base_column, join_column)>
         filters: &QueryFilters,
     ) -> DbResult<Vec<Row>> {
         let pool = self.get_pool()?;

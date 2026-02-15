@@ -486,7 +486,7 @@ impl DatabaseController for SqliteManager {
         Ok(results.pop())
     }
 
-    async fn query_with_join(&self, table: &str, joins: Vec<(&str, &str, &str)>, filters: &QueryFilters) -> DbResult<Vec<Row>> {
+    async fn query_with_join(&self, table: &str, joins: Vec<(&str, String, String)>, filters: &QueryFilters) -> DbResult<Vec<Row>> {
         todo!()
     }
 

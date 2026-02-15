@@ -24,7 +24,7 @@ pub trait DatabaseController: Send + Sync {
     async fn query(&self, table: &str, filters: &QueryFilters) -> DbResult<Vec<Row>>;
     async fn query_one(&self, table: &str, filters: &QueryFilters) -> DbResult<Option<Row>>;
 
-    async fn query_with_join(&self, table: &str, joins: Vec<(&str, &str, &str)>, filters: &QueryFilters) -> DbResult<Vec<Row>>;
+    async fn query_with_join(&self, table: &str, joins: Vec<(&str, String, String)>, filters: &QueryFilters) -> DbResult<Vec<Row>>;
 
     async fn update(&self, table: &str, filters: &QueryFilters, data: &Row) -> DbResult<usize>; // Returns affected rows
     async fn delete(&self, table: &str, filters: &QueryFilters) -> DbResult<usize>; // Returns affected rows

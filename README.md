@@ -658,7 +658,3 @@ DbError::NotSupported(String)
 - [ ] Query builder improvements
 - [ ] Migration system
 - [ ] Derive macros for models
-
-## License
-
-MIT OR Apache-2.0

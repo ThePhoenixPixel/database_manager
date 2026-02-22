@@ -158,6 +158,10 @@ impl DatabaseController for DatabaseManager {
         self.query_one(table, filters).await
     }
 
+    async fn query_with_join(&self, table: &str, joins: Vec<(&str, String, String)>, filters: &QueryFilters) -> DbResult<Vec<Row>> {
+        self.query_with_join(table, joins, filters).await
+    }
+
     async fn update(&self, table: &str, filters: &QueryFilters, data: &Row) -> DbResult<usize> {
         self.update(table, filters, data).await
     }

@@ -13,7 +13,7 @@ use database_manager::config::DBMysqlConfig;
 
 
 #[derive(TableDerive, Debug, Clone)]
-#[table_name = "users"]
+#[table_name("t_users")]
 struct User {
     #[primary_key]
     #[auto_increment]
@@ -21,7 +21,9 @@ struct User {
 
     name: DBText,
     email: DBText,
-    age: DBInt,
+
+    #[nullable]
+    age: Option<DBInt>,
 }
 
 #[tokio::main]
@@ -34,8 +36,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sqlite_config = DatabaseConfig::Sqlite(DBSqliteConfig::new("test.db"));
 
     #[cfg(feature = "mysql")]
-    let mysql_config = DatabaseConfig::Mysql(DBMysqlConfig::from_parts("localhost", 3306, "user", "password", "database", 10)?);
-    
+    let mysql_config = DatabaseConfig::Mysql(DBMysqlConfig::from_parts("192.168.178.22", 3306, "phoenix", "codergames2022", "phoenix", 10)?);
+
+
     // Create Database Manager
     #[cfg(feature = "sqlite")]
     let mut manager = DatabaseManager::new(sqlite_config)?;
@@ -58,30 +61,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         id: 0u16.into(), // ignore if auto_increment true
         name: "Alice".into(),
         email: "alice@example.com".into(),
-        age: 30.into(),
+        age: None,
     };
 
     let bob = User {
         id: 0u16.into(),
         name: "Bob".into(),
         email: "bob@example.com".into(),
-        age: 25.into(),
+        age: Some(25.into()),
     };
 
     let charlie = User {
         id: 0u16.into(),
         name: "Charlie".into(),
         email: "charlie@example.com".into(),
-        age: 35.into(),
+        age: Some(35.into()),
     };
 
-    let alice_id = alice.create(&manager).await?;
+    let alice_id = alice.insert(&manager).await?;
     println!("✓ Alice inserted with ID: {:?}", alice_id);
 
-    let bob_id = bob.create(&manager).await?;
+    let bob_id = bob.insert(&manager).await?;
     println!("✓ Bob inserted with ID: {:?}", bob_id);
 
-    let charlie_id = charlie.create(&manager).await?;
+    let charlie_id = charlie.insert(&manager).await?;
     println!("✓ Charlie inserted with ID: {:?}\n", charlie_id);
 
     // === GET ALL via User::all() ===

@@ -1,7 +1,5 @@
-use std::collections::HashMap;
 use async_trait::async_trait;
-use chrono::NaiveDateTime;
-use sqlx::{Column, TypeInfo, ValueRef};
+use sqlx::Column;
 use sqlx::mysql::{MySqlPool, MySqlPoolOptions, MySqlRow};
 use sqlx::{Row as SqlxRow};
 
@@ -65,6 +63,36 @@ impl MysqlManager {
         def
     }
 
+    fn build_where_clause(filters: &QueryFilters) -> String {
+        if filters.filters.is_empty() {
+            return String::new();
+        }
+
+        let conditions: Vec<String> = filters.filters.iter()
+            .map(|f| {
+                match &f.operator {
+                    FilterOperator::Equals => format!("{} = ?", f.column),
+                    FilterOperator::NotEquals => format!("{} != ?", f.column),
+                    FilterOperator::GreaterThan => format!("{} > ?", f.column),
+                    FilterOperator::LessThan => format!("{} < ?", f.column),
+                    FilterOperator::GreaterOrEqual => format!("{} >= ?", f.column),
+                    FilterOperator::LessOrEqual => format!("{} <= ?", f.column),
+                    FilterOperator::Like => format!("{} LIKE ?", f.column),
+                    FilterOperator::IsNull => format!("{} IS NULL", f.column),
+                    FilterOperator::IsNotNull => format!("{} IS NOT NULL", f.column),
+                    FilterOperator::In => {
+                        let count = f.values.as_ref().map(|v| v.len()).unwrap_or(0);
+                        let placeholders = vec!["?"; count].join(", ");
+                        format!("{} IN ({})", f.column, placeholders)
+                    }
+                    FilterOperator::Between => format!("{} BETWEEN ? AND ?", f.column),
+                }
+            })
+            .collect();
+
+        format!(" WHERE {}", conditions.join(" AND "))
+    }
+
     fn value_to_sql(&self, value: &Value) -> String {
         match value {
             Value::Null => "NULL".to_string(),
@@ -110,7 +138,7 @@ impl MysqlManager {
                     .unwrap_or(Value::Null)
             } else if let Ok(v) = row.try_get::<Option<chrono::NaiveDateTime>, _>(idx) {
                 // Timestamp fallback
-                v.map(|vv| Value::Timestamp(DBTimestamp(vv.timestamp())))
+                v.map(|vv| Value::Timestamp(DBTimestamp(vv.and_utc().timestamp())))
                     .unwrap_or(Value::Null)
             } else {
                 // Alles andere oder nicht behandelbar → Null
@@ -123,7 +151,68 @@ impl MysqlManager {
         Ok(result)
     }
 
+    fn bind_filter_values<'q>(
+        mut query: sqlx::query::Query<'q, sqlx::MySql, sqlx::mysql::MySqlArguments>,
+        filters: &'q QueryFilters
+    ) -> sqlx::query::Query<'q, sqlx::MySql, sqlx::mysql::MySqlArguments> {
+        for filter in &filters.filters {
+            match filter.operator {
+                FilterOperator::IsNull | FilterOperator::IsNotNull => {
+                    // No values to bind
+                }
+                FilterOperator::In | FilterOperator::Between => {
+                    if let Some(values) = &filter.values {
+                        for value in values {
+                            query = Self::bind_value(query, value);
+                        }
+                    }
+                }
+                _ => {
+                    // Check 'value' first (single value), then 'values' (array)
+                    if let Some(value) = &filter.value {
+                        query = Self::bind_value(query, value);
+                    } else if let Some(values) = &filter.values {
+                        if let Some(value) = values.first() {
+                            query = Self::bind_value(query, value);
+                        }
+                    }
+                }
+            }
+        }
+        query
+    }
 
+    /// Bindet alle Filter-Werte an eine QueryAs
+    fn bind_filter_values_as<'q, O>(
+        mut query: sqlx::query::QueryAs<'q, sqlx::MySql, O, sqlx::mysql::MySqlArguments>,
+        filters: &'q QueryFilters
+    ) -> sqlx::query::QueryAs<'q, sqlx::MySql, O, sqlx::mysql::MySqlArguments> {
+        for filter in &filters.filters {
+            match filter.operator {
+                FilterOperator::IsNull | FilterOperator::IsNotNull => {
+                    // No values to bind
+                }
+                FilterOperator::In | FilterOperator::Between => {
+                    if let Some(values) = &filter.values {
+                        for value in values {
+                            query = Self::bind_value_as(query, value);
+                        }
+                    }
+                }
+                _ => {
+                    // Check 'value' first (single value), then 'values' (array)
+                    if let Some(value) = &filter.value {
+                        query = Self::bind_value_as(query, value);
+                    } else if let Some(values) = &filter.values {
+                        if let Some(value) = values.first() {
+                            query = Self::bind_value_as(query, value);
+                        }
+                    }
+                }
+            }
+        }
+        query
+    }
 
     fn bind_value<'q>(query: sqlx::query::Query<'q, sqlx::MySql, sqlx::mysql::MySqlArguments>, value: &'q Value) -> sqlx::query::Query<'q, sqlx::MySql, sqlx::mysql::MySqlArguments> {
         match value {
@@ -388,9 +477,12 @@ impl DatabaseController for MysqlManager {
         let pool = self.get_pool()?;
 
         let mut columns: Vec<&String> = data.keys().collect();
-        columns.sort(); // Sort to ensure consistent ordering
+        columns.sort();
 
-        let placeholders: Vec<String> = vec!["?"; columns.len()].iter().map(|s| s.to_string()).collect();
+        let placeholders: Vec<String> = vec!["?"; columns.len()]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
 
         let sql = format!(
             "INSERT INTO {} ({}) VALUES ({})",
@@ -421,31 +513,7 @@ impl DatabaseController for MysqlManager {
         let pool = self.get_pool()?;
 
         let mut sql = format!("SELECT * FROM {}", table);
-
-        if !filters.filters.is_empty() {
-            let conditions: Vec<String> = filters.filters.iter()
-                .map(|f| {
-                    match &f.operator {
-                        FilterOperator::Equals => format!("{} = ?", f.column),
-                        FilterOperator::NotEquals => format!("{} != ?", f.column),
-                        FilterOperator::GreaterThan => format!("{} > ?", f.column),
-                        FilterOperator::LessThan => format!("{} < ?", f.column),
-                        FilterOperator::GreaterOrEqual => format!("{} >= ?", f.column),
-                        FilterOperator::LessOrEqual => format!("{} <= ?", f.column),
-                        FilterOperator::Like => format!("{} LIKE ?", f.column),
-                        FilterOperator::IsNull => format!("{} IS NULL", f.column),
-                        FilterOperator::IsNotNull => format!("{} IS NOT NULL", f.column),
-                        FilterOperator::In => {
-                            let count = f.values.as_ref().map(|v| v.len()).unwrap_or(0);
-                            let placeholders = vec!["?"; count].join(", ");
-                            format!("{} IN ({})", f.column, placeholders)
-                        }
-                        FilterOperator::Between => format!("{} BETWEEN ? AND ?", f.column),
-                    }
-                })
-                .collect();
-            sql.push_str(&format!(" WHERE {}", conditions.join(" AND ")));
-        }
+        sql.push_str(&Self::build_where_clause(filters));
 
         if let Some(order) = &filters.order_by {
             let order_clauses: Vec<String> = order.iter()
@@ -468,31 +536,8 @@ impl DatabaseController for MysqlManager {
             sql.push_str(&format!(" OFFSET {}", offset));
         }
 
-        let mut query = sqlx::query(&sql);
-        for filter in &filters.filters {
-            match filter.operator {
-                FilterOperator::IsNull | FilterOperator::IsNotNull => {
-                    // No values to bind
-                }
-                FilterOperator::In | FilterOperator::Between => {
-                    if let Some(values) = &filter.values {
-                        for value in values {
-                            query = Self::bind_value(query, value);
-                        }
-                    }
-                }
-                _ => {
-                    // Check 'value' first (single value), then 'values' (array)
-                    if let Some(value) = &filter.value {
-                        query = Self::bind_value(query, value);
-                    } else if let Some(values) = &filter.values {
-                        if let Some(value) = values.first() {
-                            query = Self::bind_value(query, value);
-                        }
-                    }
-                }
-            }
-        }
+        let query = sqlx::query(&sql);
+        let query = Self::bind_filter_values(query, filters);
 
         let rows = query
             .fetch_all(pool)
@@ -516,52 +561,28 @@ impl DatabaseController for MysqlManager {
     async fn query_with_join(
         &self,
         base_table: &str,
-        joins: Vec<(&str, String, String)>, // Vec<(join_table, base_column, join_column)>
+        joins: Vec<(&str, String, String)>,
         filters: &QueryFilters,
     ) -> DbResult<Vec<Row>> {
         let pool = self.get_pool()?;
 
-        // Basis-SQL
         let mut sql = format!("SELECT {}.*", base_table);
 
-        // Optional: Alle Spalten der Join-Tabellen hinzufügen
         for (join_table, _, _) in &joins {
             sql.push_str(&format!(", {}.*", join_table));
         }
 
         sql.push_str(&format!(" FROM {}", base_table));
 
-        // JOINs hinzufügen
         for (join_table, base_col, join_col) in &joins {
-            sql.push_str(&format!(" LEFT JOIN {} ON {}.{} = {}.{}",
-                                  join_table, base_table, base_col, join_table, join_col));
+            sql.push_str(&format!(
+                " LEFT JOIN {} ON {}.{} = {}.{}",
+                join_table, base_table, base_col, join_table, join_col
+            ));
         }
 
-        // WHERE-Klausel basierend auf Filter
-        if !filters.filters.is_empty() {
-            let conditions: Vec<String> = filters.filters.iter()
-                .map(|f| match f.operator {
-                    FilterOperator::Equals => format!("{} = ?", f.column),
-                    FilterOperator::NotEquals => format!("{} != ?", f.column),
-                    FilterOperator::GreaterThan => format!("{} > ?", f.column),
-                    FilterOperator::LessThan => format!("{} < ?", f.column),
-                    FilterOperator::GreaterOrEqual => format!("{} >= ?", f.column),
-                    FilterOperator::LessOrEqual => format!("{} <= ?", f.column),
-                    FilterOperator::Like => format!("{} LIKE ?", f.column),
-                    FilterOperator::IsNull => format!("{} IS NULL", f.column),
-                    FilterOperator::IsNotNull => format!("{} IS NOT NULL", f.column),
-                    FilterOperator::In => {
-                        let count = f.values.as_ref().map(|v| v.len()).unwrap_or(0);
-                        let placeholders = vec!["?"; count].join(", ");
-                        format!("{} IN ({})", f.column, placeholders)
-                    }
-                    FilterOperator::Between => format!("{} BETWEEN ? AND ?", f.column),
-                })
-                .collect();
-            sql.push_str(&format!(" WHERE {}", conditions.join(" AND ")));
-        }
+        sql.push_str(&Self::build_where_clause(filters));
 
-        // ORDER, LIMIT, OFFSET
         if let Some(order) = &filters.order_by {
             let order_clauses: Vec<String> = order.iter()
                 .map(|(col, dir)| match dir {
@@ -580,19 +601,9 @@ impl DatabaseController for MysqlManager {
             sql.push_str(&format!(" OFFSET {}", offset));
         }
 
-        // Query binden
-        let mut query = sqlx::query(&sql);
-        for filter in &filters.filters {
-            if let Some(value) = &filter.value {
-                query = Self::bind_value(query, value);
-            } else if let Some(values) = &filter.values {
-                if let Some(value) = values.first() {
-                    query = Self::bind_value(query, value);
-                }
-            }
-        }
+        let query = sqlx::query(&sql);
+        let query = Self::bind_filter_values(query, filters);
 
-        // Ausführen und in Rows umwandeln
         let rows = query
             .fetch_all(pool)
             .await
@@ -608,38 +619,24 @@ impl DatabaseController for MysqlManager {
         let pool = self.get_pool()?;
 
         let mut keys: Vec<&String> = data.keys().collect();
-        keys.sort(); // Sort to ensure consistent ordering
+        keys.sort();
 
         let set_clauses: Vec<String> = keys.iter()
             .map(|key| format!("{} = ?", key))
             .collect();
 
         let mut sql = format!("UPDATE {} SET {}", table, set_clauses.join(", "));
-
-        if !filters.filters.is_empty() {
-            let conditions: Vec<String> = filters.filters.iter()
-                .map(|f| format!("{} = ?", f.column))
-                .collect();
-            sql.push_str(&format!(" WHERE {}", conditions.join(" AND ")));
-        }
+        sql.push_str(&Self::build_where_clause(filters));
 
         let mut query = sqlx::query(&sql);
 
-        // Bind SET values in same order as keys
+        // Bind SET values first
         for key in &keys {
             query = Self::bind_value(query, &data[*key]);
         }
 
-        // Bind WHERE values
-        for filter in &filters.filters {
-            if let Some(value) = &filter.value {
-                query = Self::bind_value(query, value);
-            } else if let Some(values) = &filter.values {
-                if let Some(value) = values.first() {
-                    query = Self::bind_value(query, value);
-                }
-            }
-        }
+        // Then bind WHERE values
+        query = Self::bind_filter_values(query, filters);
 
         let result = query
             .execute(pool)
@@ -656,26 +653,10 @@ impl DatabaseController for MysqlManager {
         let pool = self.get_pool()?;
 
         let mut sql = format!("DELETE FROM {}", table);
+        sql.push_str(&Self::build_where_clause(filters));
 
-        if !filters.filters.is_empty() {
-            let conditions: Vec<String> = filters.filters.iter()
-                .map(|f| format!("{} = ?", f.column))
-                .collect();
-            sql.push_str(&format!(" WHERE {}", conditions.join(" AND ")));
-        }
-
-        let mut query = sqlx::query(&sql);
-
-        // Bind WHERE values
-        for filter in &filters.filters {
-            if let Some(value) = &filter.value {
-                query = Self::bind_value(query, value);
-            } else if let Some(values) = &filter.values {
-                if let Some(value) = values.first() {
-                    query = Self::bind_value(query, value);
-                }
-            }
-        }
+        let query = sqlx::query(&sql);
+        let query = Self::bind_filter_values(query, filters);
 
         let result = query
             .execute(pool)
@@ -692,26 +673,10 @@ impl DatabaseController for MysqlManager {
         let pool = self.get_pool()?;
 
         let mut sql = format!("SELECT COUNT(*) FROM {}", table);
+        sql.push_str(&Self::build_where_clause(filters));
 
-        if !filters.filters.is_empty() {
-            let conditions: Vec<String> = filters.filters.iter()
-                .map(|f| format!("{} = ?", f.column))
-                .collect();
-            sql.push_str(&format!(" WHERE {}", conditions.join(" AND ")));
-        }
-
-        let mut query = sqlx::query_as(&sql);
-
-        // Bind WHERE values
-        for filter in &filters.filters {
-            if let Some(value) = &filter.value {
-                query = Self::bind_value_as(query, value);
-            } else if let Some(values) = &filter.values {
-                if let Some(value) = values.first() {
-                    query = Self::bind_value_as(query, value);
-                }
-            }
-        }
+        let query = sqlx::query_as(&sql);
+        let query = Self::bind_filter_values_as(query, filters);
 
         let count: (i64,) = query
             .fetch_one(pool)

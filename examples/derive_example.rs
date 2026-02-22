@@ -2,9 +2,9 @@ use database_manager_derive::Table;
 use database_manager::{
     DatabaseManager, Table,
     config::DatabaseConfig,
-    drivers::sqlite::DBSqliteConfig,
 };
 use std::collections::HashMap;
+use database_manager::config::DBSqliteConfig;
 use database_manager::types::*;
 
 // Define a table using struct with derive macro
@@ -13,11 +13,11 @@ use database_manager::types::*;
 struct Users {
     #[primary_key]
     #[auto_increment]
-    id: DBInteger,
+    id: DBUInt,
 
     name: DBText,
     email: DBText,
-    age: DBInteger,
+    age: DBInt,
 
     #[nullable]
     bio: DBText,
@@ -28,9 +28,9 @@ struct Users {
 struct Posts {
     #[primary_key]
     #[auto_increment]
-    id: DBInteger,
+    id: DBUInt,
 
-    user_id: DBInteger,
+    user_id: DBInt,
     title: DBText,
     content: DBText,
     published: DBBoolean,

@@ -1,8 +1,10 @@
 .idea
 /target
-/examples/derive_example.rs
 /examples/mysql_example.rs
 /examples/sqlite_example.rs
+
+/database_manager_derive/.idea
+/database_manager_derive/target
 
 test.db
 
